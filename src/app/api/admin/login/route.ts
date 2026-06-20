@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from '@vercel/postgres';
-import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
 
 export async function POST(req: NextRequest) {
@@ -11,31 +9,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Missing credentials' }, { status: 400 });
     }
 
-    const result = await sql`
-      SELECT password_hash FROM admin_users WHERE username = ${username}
-    `;
+    // Direct Login Bypass: Ab database check karne ki koi tension nahi hai
+    if (username === 'admin' && password === 'admin123') {
+      const cookieStore = await cookies();
+      cookieStore.set('admin_session', username, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 60 * 60 * 8, // 8 Hours session
+        path: '/',
+      });
 
-    if (result.rows.length === 0) {
-      return NextResponse.json({ success: false, message: 'Invalid username or password' }, { status: 401 });
+      return NextResponse.json({ success: true });
     }
 
-    const hash = result.rows[0].password_hash;
-    const valid = await bcrypt.compare(password, hash);
-
-    if (!valid) {
-      return NextResponse.json({ success: false, message: 'Invalid username or password' }, { status: 401 });
-    }
-
-    const cookieStore = await cookies();
-    cookieStore.set('admin_session', username, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 60 * 60 * 8, // 8 hours
-      path: '/',
-    });
-
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: false, message: 'Invalid username or password' }, { status: 401 });
   } catch (error) {
     console.error('Login error:', error);
     return NextResponse.json({ success: false, message: 'Server error' }, { status: 500 });
